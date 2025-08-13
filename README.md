@@ -1,5 +1,4 @@
 # VScript Benchmark Script
-## By Braindawg
 
 Simple VScript library for performance debugging using the in-game performance counter.  
 
