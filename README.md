@@ -27,10 +27,10 @@ function Benchmark::MyFunction3() {
 }
 
 // start benchmarking loop
-EntFire( "__benchmark", "CallScriptFunction", "_Start" )
+EntFire( "__benchmark", "CallScriptFunction", "Start" )
 
-// stop the loop after 15s
-EntFire( "__benchmark", "CallScriptFunction", "_Stop", 15 )
+// stop the loop after 20s
+EntFire( "__benchmark", "CallScriptFunction", "Stop", 20 )
 ```
 
 ### Advanced setup
@@ -47,19 +47,17 @@ function MyFunction2() {
 
     // ...
 }
-Benchmark._Add( MyFunction2, 3 ) // 3s delay
+Benchmark.Add( MyFunction2, 3 ) // 3s delay
 
 function MyFunction3() {
 
     // ...
 }
 // One-off single function call with an optional delay
-Benchmark._Run( MyFunction3, 10 ) // 10s delay
+Benchmark.RunOnce( MyFunction3, 10 ) // 10s delay
 
-// run all registered functions
-EntFire( "__benchmark", "CallScriptFunction", "_Start" )
-// stop the loop after 30s
-EntFire( "__benchmark", "CallScriptFunction", "_Stop", 30 )
+// run all registered functions once
+EntFire( "__benchmark", "CallScriptFunction", "StartOnce" )
 ```
 
 ### Notes
@@ -72,5 +70,5 @@ EntFire( "__benchmark", "CallScriptFunction", "_Stop", 30 )
         - add "vscript_perf_warning_spew_ms" to their convar allowlist
         - set sv_allow_point_servercommand to "always"
         - manually set the convar to 0.0 and ignore the perf warnings for internal library functions
-- Stop and reload the entire benchmark system using `ent_fire __benchmark RunScriptCode "_Kill(true)"`
+- Stop and reload the entire benchmark system using `ent_fire __benchmark RunScriptCode "KillBenchmark(true)"`
     - killing the entity also works but this will not cancel actively running benchmarks

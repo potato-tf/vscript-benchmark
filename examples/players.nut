@@ -31,4 +31,4 @@ function Benchmark::ByIndexNoPlayer() {
             local temp = ent
 }
 
-EntFire( "__benchmark", "CallScriptFunction", "_Start" )
+EntFire( "__benchmark", "CallScriptFunction", "Start" )

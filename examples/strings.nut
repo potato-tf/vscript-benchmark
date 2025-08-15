@@ -34,4 +34,4 @@ function Benchmark::StringKVStringConcat() {
 }
 
 
-EntFire( "__benchmark", "CallScriptFunction", "_Start" )
+EntFire( "__benchmark", "CallScriptFunction", "Start" )

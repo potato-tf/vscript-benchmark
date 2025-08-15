@@ -30,4 +30,10 @@ function Benchmark::Folded() {
     }
 }
 
-EntFire( "__benchmark", "CallScriptFunction", "_Start" )
+Benchmark.Testing <- function() {
+
+    for ( local i = 0; i < 1000; i++ )
+        i * 2
+}
+
+EntFire( "__benchmark", "CallScriptFunction", "Start" )
