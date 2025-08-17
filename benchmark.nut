@@ -80,7 +80,8 @@ local function_blacklist = {
     Call                = null
     DispatchPrecache    = null
     DispatchOnPostSpawn = null
-    CancelPendingOnKill = null // also this one
+    __OpenLogFile       = null
+    __CancelPendingOnKill = null // also this one
 }
 
 /*************************************************************
