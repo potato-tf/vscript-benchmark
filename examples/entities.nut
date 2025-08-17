@@ -136,30 +136,4 @@ function Benchmark::Done() {
     EntFire( "crystal*", "Kill" )
 }
 
-function InstanceOf() {
-
-    for (local ent = Entities.First(); ent; ent = Entities.Next(ent))
-        if ( ent instanceof CTFPlayer )
-            local temp = ent
-}
-
-function Classname() {
-
-    for (local ent = Entities.First(); ent; ent = Entities.Next(ent))
-        if ( ent.GetClassname() == "player" )
-            local temp = ent
-}
-
-function IsPlayer() {
-
-    for (local ent = Entities.First(); ent; ent = Entities.Next(ent))
-        if ( ent.IsPlayer() )
-            local temp = ent
-}
-Benchmark.Add( IsPlayer, 1 )
-Benchmark.Add( InstanceOf, 1.5 )
-Benchmark.Add( Classname, 2 )
-Benchmark.Add( Classname, 2.5 )
-Benchmark.Add( Classname, 3 )
-
 EntFire( "__benchmark", "CallScriptFunction", "Start" )

@@ -1,24 +1,20 @@
-// Functions starts at line 250
-
 if ( "Benchmark" in getroottable() )
     return
 
-/**********
- * CONFIG *
- **********/
+/***************************************************
+ * CONFIG                                          *
+ * most config settings can also be set per-script *
+ * e.g. Benchmark.LOOP_RESTART_DELAY = 10          *
+ * NO_MULTITHREADING cannot be set per-script      *
+ ***************************************************/
 local config = {
 
-    // sets mat_queue_mode 0 while script is active
-    NO_MULTITHREADING  = true
+    NO_MULTITHREADING  = true // sets mat_queue_mode 0 while script is active
 
-    // default delay in seconds between function calls
-    FUNCTION_CALL_DELAY = 0.1
+    FUNCTION_CALL_DELAY = 0.3 // default delay in seconds between function calls
+    LOOP_RESTART_DELAY  = 5 // default delay in seconds between full benchmark loop restarts
 
-    // default delay in seconds between full benchmark loop restarts
-    LOOP_RESTART_DELAY = 5
-
-    // automatically control the perf counter during benchmarks
-    AUTO_PERF_COUNTER = true
+    AUTO_PERF_COUNTER = true // automatically control the perf counter during benchmarks
 
     // automatically add functions to the benchmark loop in the order they are defined
     // functions must be scoped to Benchmark.  e.g. Benchmark::MyFunc()
@@ -31,10 +27,16 @@ local config = {
     // 2 = filter functions, but print non-filtered text as gray, not recommended if benchmark includes thinks
     FILTER_TEXT = 1
 
-    // minimum perf warning ms, don't set this too low if FILTER_TEXT is not set to 1
-    MIN_PERF_WARNING_MS = 0.01
+    // minimum perf warning ms
+    // probably don't set this too low if FILTER_TEXT is not 1
+    MIN_PERF_WARNING_MS = 0.005
 
-    // functions will not wait for the next benchmark loop after being added
+    // log output to file
+    // LOG_DIR = "benchmarks" would log to tf/scriptdata/benchmarks/
+    LOG_OUTPUT = true
+    LOG_DIR    = "benchmarks"
+
+    // functions will not wait for the next benchmark loop and will immediately trigger a new benchmark loop
     // you should almost never set this to true, mostly here for testing
     NO_QUEUE = false
 }
@@ -42,8 +44,6 @@ local config = {
 /*************
  * CONSTANTS *
  *************/
-
-// put this one in root so other scripts can use it
 ::__ROOT  <- getroottable()
 
 local BENCHMARK_PREFIX    = "[BENCHMARK] "
@@ -100,56 +100,14 @@ foreach ( k, v in config )
     Benchmark[ k ] <- v
 
 // Misc internal variables
+Benchmark.__targetname      <- benchmark_ent.GetName()
 Benchmark.__loop_delay      <-  0.0 // delay between loop restarts
-Benchmark.__restart_on_kill <- false // reload the benchmark system after it's killed
 Benchmark.__internal_funcs  <- {} // track internal functions
 Benchmark.__do_restart      <- false // restart loop is active
 Benchmark.__perf_warning_ms <- GetConvarFloat( PERF_COUNTER_CVAR )
 Benchmark.__mat_queue_mode  <- GetConvarInt( "mat_queue_mode" )
 Benchmark.__old_con_filter  <- GetConvarInt( "con_filter_enable" )
-
-local function __titleprint( title, author, extra = "" ) {
-
-    SendToConsole( "developer 0; mat_queue_mode 0; con_filter_enable 0" )
-
-    local length = title.len()
-    if ( author.len() > length )
-        length = author.len()
-    if ( extra.len() > length )
-        length = extra.len()
-    length += 2
-
-    local start = "\n\n=", end = "=", padding = " "
-
-    for (local i = 0; i <= length; i++) {
-
-        end     += "="
-        start   += "="
-        padding += " "
-    }
-
-    start += "\n= "
-    end   += "\n\n"
-
-    local padding_len = padding.len() - 6
-
-    local __pad = @( text, mod = 0 ) padding_len - (text.len() + mod) > 1 ? padding.slice( 0, padding_len - (text.len() + mod) ) : ""
-    error( start )
-    print( title )
-    error( format( "%s =\n= ", __pad( title, -2 ) ) )
-    print( "By " )
-    error( format( "%s%s", author, __pad( author ) ) )
-    if ( extra != "" ) {
-        error( format( "=\n=%s", __pad( "", -4 ) ) )
-        error( "=\n= " )
-        print( format( "%s%s ", extra, __pad( extra ) ) )
-    }
-    error( format( "=\n%s", end ) )
-
-    SendToConsole( format( "mat_queue_mode %d; con_filter_enable %d", Benchmark.__mat_queue_mode, Benchmark.__old_con_filter ) )
-}
-
-__titleprint( "VScript Benchmarking Script", "Braindawg", "https://github.com/potato-tf/vscript-benchmark" )
+Benchmark.__old_logfile     <- GetConvar( "con_logfile" )
 
 // error("\n\n==================================================\n= ")
 // print("VScript Benchmarking Script")
@@ -231,16 +189,6 @@ Benchmark.setdelegate({
     })
 )
 
-// make kill inputs cancel active benchmarks
-local function CancelPendingOnKill() {
-
-    self.AcceptInput( CANCEL_PENDING, null, null, null )
-    return true
-}
-Benchmark.InputKill <- CancelPendingOnKill
-Benchmark.Inputkill <- CancelPendingOnKill
-Benchmark.InputKillHierarchy <- CancelPendingOnKill
-Benchmark.Inputkillhierarchy <- CancelPendingOnKill
 
 /*************
  * FUNCTIONS *
@@ -253,13 +201,13 @@ function Benchmark::ConsoleCmd( cmd = PERF_COUNTER_CVAR, value = 1.5 ) {
         return GetConvar( cmd )
 
     if ( !IS_DEDICATED )
-        SendToConsole( format( "%s %.8f", cmd, value ) )
+        SendToConsole( format( "%s %s", cmd, value.tostring() ) )
 
     else if ( CONVAR_ON_ALLOWLIST )
         SetConvar( cmd, value )
 
     else if ( GetConvar( "sv_allow_point_servercommand" ) == "always" )
-        SendToServerConsole( format( "%s %.8f", cmd, value ) )
+        SendToServerConsole( format( "%s %s", cmd, value.tostring() ) )
 }
 
 // print with formatting
@@ -286,11 +234,11 @@ function Benchmark::Add( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
     // apparently !self doesn't work in AddOutput
     if ( FILTER_TEXT ) {
 
-        AddOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, format( "_Filter_%s", func_name ), delay, -1 )
+        AddOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, format( "_Filter_%s", func_name ), delay, -1 )
         delay += 0.02
     }
 
-    AddOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, func_name, delay, -1 )
+    AddOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, func_name, delay, -1 )
 
     if ( delay > __loop_delay )
         __loop_delay = delay
@@ -301,6 +249,8 @@ function Benchmark::Add( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
  ******************************************/
 function Benchmark::StartOnce() {
 
+    __filename = getstackinfos( 2 ).src
+
     if ( FILTER_TEXT > 0 )
         SendToConsole( "con_filter_text BENCHMARK" )
 
@@ -308,8 +258,8 @@ function Benchmark::StartOnce() {
     if ( AUTO_PERF_COUNTER )
         ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
 
-    RemoveOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, END_LOOP )
-    AddOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, END_LOOP, __loop_delay, -1 )
+    RemoveOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP )
+    AddOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP, __loop_delay, -1 )
     benchmark_ent.AcceptInput( TRIGGER_INPUT, null, null, null )
 }
 
@@ -326,6 +276,8 @@ function Benchmark::Start() {
  * WARNING: Do not use this while AUTO_ADD_FUNCTIONS is true, duplicates outputs    *
  ************************************************************************************/
 function Benchmark::StartAll( delay = Benchmark.FUNCTION_CALL_DELAY ) {
+
+    __filename = getstackinfos( 2 ).src
 
     foreach ( name, func in Benchmark )
         if ( __ValidateFunc( func ) )
@@ -367,30 +319,30 @@ Benchmark.StopAll <- Benchmark.Stop
 /********************************************************************
  * One-off single function call with an optional delay              *
  * WARNING: Cannot be stopped using StopAll                         *
- * Benchmark.KillBenchmark( true ) will stop and restart everything *
  ********************************************************************/
 function Benchmark::RunOnce( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
 
     local func_name = __GetFunc( func, true )
+
+    __filename = getstackinfos( 2 ).src
+
     if ( FILTER_TEXT ) {
         EntFireByHandle( benchmark_ent, CALL_FUNCTION, format( "_Filter_%s", func_name ), delay, null, null )
         delay += 0.1
     }
+    if ( LOG_OUTPUT )
+        EntFireByHandle( benchmark_ent, "CallScriptFunction", "__OpenLogFile", delay - 0.1, null, null )
+
     EntFireByHandle( benchmark_ent, CALL_FUNCTION, func_name, delay, null, null )
-}
 
-/***********************************************************
- * Kill and optionally restart the entire benchmark system *
- ***********************************************************/
-function Benchmark::KillBenchmark( restart = false ) {
-
-    __restart_on_kill = restart
-    benchmark_ent.Kill()
+    if ( LOG_OUTPUT )
+        EntFireByHandle( benchmark_ent, "CallScriptFunction", "__CloseLogFile", delay + 0.1, null, null )
 }
 
 /**********************
  * INTERNAL FUNCTIONS *
  **********************/
+
 function Benchmark::__EndLoop() {
 
     if ( FILTER_TEXT > 0 )
@@ -411,13 +363,16 @@ function Benchmark::__StartLoop() {
     if ( FILTER_TEXT > 0 )
         SendToConsole( "con_filter_text BENCHMARK" )
 
+    if ( LOG_OUTPUT )
+        __OpenLogFile()
+
     if ( !__do_restart )
         BenchmarkPrint( BENCHMARK_START )
 
-    RemoveOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, END_LOOP )
-    RemoveOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, RESTART_LOOP )
-    AddOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, END_LOOP, __loop_delay, -1 )
-    AddOutput( benchmark_ent, ON_TRIGGER, benchmark_ent.GetName(), CALL_FUNCTION, RESTART_LOOP, __loop_delay + LOOP_RESTART_DELAY, -1 )
+    RemoveOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP )
+    RemoveOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, RESTART_LOOP )
+    AddOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP, __loop_delay, -1 )
+    AddOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, RESTART_LOOP, __loop_delay + LOOP_RESTART_DELAY, -1 )
 
     __do_restart = true
 
@@ -494,7 +449,79 @@ function Benchmark::__GetAllOutputs( ent, output ) {
 	return outputs
 }
 
+function Benchmark::__CancelPendingOnKill() {
+
+    self.AcceptInput( CANCEL_PENDING, null, null, null )
+    return true
+}
+
+function Benchmark::__OpenLogFile() {
+    
+    if ( LOG_OUTPUT ) {
+
+        local time = {}
+        LocalTime( time )
+        local logfile = format( "scriptdata/%s/%s/%d_%d_%d_%d_%d_%d.log", LOG_DIR, __filename.slice( 0, -4 ), time.year, time.month, time.day, time.hour, time.minute, time.second )
+        FileToString( logfile ) // create log file
+        ConsoleCmd( "con_logfile", logfile )
+    }
+
+    return true
+}
+
+function Benchmark::__CloseLogFile() {
+
+    if ( LOG_OUTPUT )
+        ConsoleCmd( "con_logfile", __old_logfile )
+
+    return true
+}
+
+
+function Benchmark::__titleprint( title, author, extra = "" ) {
+
+    SendToConsole( "developer 0; mat_queue_mode 0; con_filter_enable 0" )
+
+    local length = title.len()
+    if ( author.len() > length )
+        length = author.len()
+    if ( extra.len() > length )
+        length = extra.len()
+    length += 2
+
+    local start = "\n\n=", end = "=", padding = " "
+
+    for (local i = 0; i <= length; i++) {
+
+        end     += "="
+        start   += "="
+        padding += " "
+    }
+
+    start += "\n= "
+    end   += "\n\n"
+
+    local padding_len = padding.len() - 6
+
+    local __pad = @( text, mod = 0 ) padding_len - (text.len() + mod) > 1 ? padding.slice( 0, padding_len - (text.len() + mod) ) : ""
+    error( start )
+    print( title )
+    error( format( "%s =\n= ", __pad( title, -2 ) ) )
+    print( "By " )
+    error( format( "%s%s", author, __pad( author ) ) )
+    if ( extra != "" ) {
+        error( format( "=\n=%s", __pad( "", -4 ) ) )
+        error( "=\n= " )
+        print( format( "%s%s ", extra, __pad( extra ) ) )
+    }
+    error( format( "=\n%s", end ) )
+
+    SendToConsole( format( "mat_queue_mode %d; con_filter_enable %d", Benchmark.__mat_queue_mode, Benchmark.__old_con_filter ) )
+}
+
 function Benchmark::_BenchmarkInit() {
+
+    __titleprint( "VScript Benchmarking Script", "Braindawg", "https://github.com/potato-tf/vscript-benchmark" )
 
     __filename <- getstackinfos( 2 ).src
 
@@ -505,6 +532,10 @@ function Benchmark::_BenchmarkInit() {
         SendToConsole( "mat_queue_mode 0" )
     }
 
+    // create log directory
+    if ( LOG_OUTPUT )
+        FileToString( format( "%s/ ", LOG_DIR ) )
+
     if ( FILTER_TEXT <= 0 ) {
 
         if ( FILTER_TEXT == -1 ) {
@@ -514,17 +545,12 @@ function Benchmark::_BenchmarkInit() {
         }
 
         SendToConsole( "con_filter_text \"\"; con_filter_enable 1" )
-
-        return
     }
-
-    SendToConsole( format("con_filter_text_out _get; con_filter_text BENCHMARK; con_filter_enable %d", FILTER_TEXT.tointeger() ) )
+    else
+        SendToConsole( format("con_filter_text_out _get; con_filter_text BENCHMARK; con_filter_enable %d", FILTER_TEXT.tointeger() ) )
 }
 
 function Benchmark::_BenchmarkDestroy() {
-
-    if ( __restart_on_kill )
-        EntFire( "BigNet", "RunScriptFile", __filename, 0.2 )
 
     if ( AUTO_PERF_COUNTER )
         ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
@@ -532,6 +558,17 @@ function Benchmark::_BenchmarkDestroy() {
     if ( FILTER_TEXT )
         SendToConsole( "con_filter_enable 0" )
 
+    if ( LOG_OUTPUT )
+        ConsoleCmd( "con_logfile", __old_logfile )
+
     if ( "__ROOT" in getroottable() )
         delete ::__ROOT
 }
+
+Benchmark.InputKill <- Benchmark.__CancelPendingOnKill
+Benchmark.Inputkill <- Benchmark.__CancelPendingOnKill
+Benchmark.InputKillHierarchy <- Benchmark.__CancelPendingOnKill
+Benchmark.Inputkillhierarchy <- Benchmark.__CancelPendingOnKill
+
+Benchmark.InputCancelPending <- Benchmark.__CloseLogFile
+Benchmark.Inputcancelpending <- Benchmark.__CloseLogFile
