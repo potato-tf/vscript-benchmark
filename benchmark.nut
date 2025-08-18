@@ -109,6 +109,7 @@ Benchmark.__perf_warning_ms <- GetConvarFloat( PERF_COUNTER_CVAR )
 Benchmark.__mat_queue_mode  <- GetConvarInt( "mat_queue_mode" )
 Benchmark.__old_con_filter  <- GetConvarInt( "con_filter_enable" )
 Benchmark.__old_logfile     <- GetConvar( "con_logfile" )
+Benchmark.__num_runs        <- 0
 
 // error("\n\n==================================================\n= ")
 // print("VScript Benchmarking Script")
@@ -124,6 +125,16 @@ Benchmark.__old_logfile     <- GetConvar( "con_logfile" )
 Benchmark.setdelegate({
 
         delay = 0.0
+
+        function _get( k ) {
+
+            local internal = format( "_%s", k )
+
+            if ( internal in Benchmark && Benchmark.__internal_funcs[internal] == null )
+                return Benchmark.__internal_funcs[internal]
+
+            return parent[k]
+        }
 
         function _newslot( k, v ) {
 
@@ -196,7 +207,7 @@ Benchmark.setdelegate({
  ************/
 
 // console command wrapper
-function Benchmark::ConsoleCmd( cmd = PERF_COUNTER_CVAR, value = 1.5 ) {
+function Benchmark::_ConsoleCmd( cmd = PERF_COUNTER_CVAR, value = 1.5 ) {
 
     if ( value == null )
         return GetConvar( cmd )
@@ -212,7 +223,7 @@ function Benchmark::ConsoleCmd( cmd = PERF_COUNTER_CVAR, value = 1.5 ) {
 }
 
 // print with formatting
-function Benchmark::BenchmarkPrint( str, ... ) {
+function Benchmark::_BenchmarkPrint( str, ... ) {
 
     local formatted = format( "%s\n", str )
 
@@ -228,7 +239,7 @@ function Benchmark::BenchmarkPrint( str, ... ) {
  * Add a function to the benchmark loop *
  * Accepts string or function reference *
  ****************************************/
-function Benchmark::Add( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
+function Benchmark::_Add( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
 
     local func_name = __GetFunc( func, true )
 
@@ -248,7 +259,7 @@ function Benchmark::Add( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
 /******************************************
  * Run the benchmark loop once, then stop *
  ******************************************/
-function Benchmark::StartOnce() {
+function Benchmark::_StartOnce() {
 
     __filename = getstackinfos( 2 ).src
 
@@ -267,7 +278,7 @@ function Benchmark::StartOnce() {
 /**********************************************************
  * Start the benchmark loop.  Stop the loop with StopAll *
  **********************************************************/
-function Benchmark::Start() {
+function Benchmark::_Start() {
 
     __StartLoop()
 }
@@ -276,7 +287,7 @@ function Benchmark::Start() {
  * Find all functions in the Benchmark scope/namespace and start the benchmark loop *
  * WARNING: Do not use this while AUTO_ADD_FUNCTIONS is true, duplicates outputs    *
  ************************************************************************************/
-function Benchmark::StartAll( delay = Benchmark.FUNCTION_CALL_DELAY ) {
+function Benchmark::_StartAll( delay = Benchmark.FUNCTION_CALL_DELAY ) {
 
     __filename = getstackinfos( 2 ).src
 
@@ -291,7 +302,7 @@ function Benchmark::StartAll( delay = Benchmark.FUNCTION_CALL_DELAY ) {
  * Stop the benchmark loop                           *
  * wipe = true will clear all queued benchmark calls *
  *****************************************************/
-function Benchmark::Stop( wipe = false ) {
+function Benchmark::_Stop( wipe = false ) {
 
     if ( AUTO_PERF_COUNTER )
         ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
@@ -321,7 +332,7 @@ Benchmark.StopAll <- Benchmark.Stop
  * One-off single function call with an optional delay              *
  * WARNING: Cannot be stopped using StopAll                         *
  ********************************************************************/
-function Benchmark::RunOnce( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
+function Benchmark::_RunOnce( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
 
     local func_name = __GetFunc( func, true )
 
@@ -346,6 +357,8 @@ function Benchmark::RunOnce( func, delay = Benchmark.FUNCTION_CALL_DELAY ) {
 
 function Benchmark::__EndLoop() {
 
+    __num_runs = 0
+
     if ( FILTER_TEXT > 0 )
         SendToConsole( "con_filter_text BENCHMARK" )
 
@@ -360,6 +373,8 @@ function Benchmark::__EndLoop() {
 }
 
 function Benchmark::__StartLoop() {
+
+    __num_runs = 1
 
     if ( FILTER_TEXT > 0 )
         SendToConsole( "con_filter_text BENCHMARK" )
@@ -384,6 +399,8 @@ function Benchmark::__StartLoop() {
 }
 
 function Benchmark::__RestartLoop() {
+
+    __num_runs++
 
     if ( FILTER_TEXT > 0 )
         SendToConsole( "con_filter_text BENCHMARK" )
