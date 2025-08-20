@@ -57,4 +57,4 @@ function Benchmark::ApplyLambda() {
     _arr.apply( @(v, i) i * 2 )
 }
 
-EntFire( "__benchmark", "CallScriptFunction", "StartOnce" )
+Benchmark.StartOnce()

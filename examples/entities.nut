@@ -136,4 +136,4 @@ function Benchmark::Done() {
     EntFire( "crystal*", "Kill" )
 }
 
-EntFire( "__benchmark", "CallScriptFunction", "Start" )
+Benchmark.Start()

@@ -74,14 +74,15 @@ local RemoveOutput        = EntityOutputs.RemoveOutput.bindenv( EntityOutputs )
 local GetNumElements      = EntityOutputs.GetNumElements.bindenv( EntityOutputs )
 local GetOutputTable      = EntityOutputs.GetOutputTable.bindenv( EntityOutputs )
 
-// these exist in entity scope by default, ignore them
+// these exist in entity scope by default, or are handled differently, ignore them
 local function_blacklist = {
 
-    Call                = null
-    DispatchPrecache    = null
-    DispatchOnPostSpawn = null
-    __OpenLogFile       = null
-    __CancelPendingOnKill = null // also this one
+    Call                  = null
+    DispatchPrecache      = null
+    DispatchOnPostSpawn   = null
+    __OpenLogFile         = null
+    __CloseLogFile        = null
+    __CancelPendingOnKill = null
 }
 
 /*************************************************************
@@ -111,67 +112,52 @@ Benchmark.__old_con_filter  <- GetConvarInt( "con_filter_enable" )
 Benchmark.__old_logfile     <- GetConvar( "con_logfile" )
 Benchmark.__num_runs        <- 0
 
-// error("\n\n==================================================\n= ")
-// print("VScript Benchmarking Script")
-// error("                    =\n= ")
-// print("By ")
-// error("Braindawg")
-// error("                                   =\n= ")
-// print("https://github.com/potato-tf/vscript-benchmark")
-// error(" =\n==================================================\n\n")
-
 // Ghetto constructor/destructor logic using table metamethods
-// automatically adds functions to the benchmark loop in the order they're defined
 Benchmark.setdelegate({
 
         delay = 0.0
 
         function _get( k ) {
 
+            if ( startswith( k, "Input") )
+                return this.rawget( k )
+
             local internal = format( "_%s", k )
 
-            if ( internal in Benchmark && Benchmark.__internal_funcs[internal] == null )
-                return Benchmark.__internal_funcs[internal]
+            if ( internal in this && internal in __internal_funcs )
+                return __internal_funcs.rawget( internal )
 
-            return parent[k]
+            return this.rawget( k )
         }
 
         function _newslot( k, v ) {
 
             if ( k == "_BenchmarkDestroy" && _BenchmarkDestroy == null )
-                _BenchmarkDestroy = v.bindenv( Benchmark )
+                _BenchmarkDestroy = v.bindenv( this )
 
-            Benchmark.rawset( k, v )
+            this.rawset( k, v )
 
             if ( typeof v == FUNCTION_TYPE && !(k in function_blacklist) && !startswith( k, "_Filter_" ) && !startswith( k, "Input" ) ) {
 
+                local call_info = getstackinfos( 2 )
+
                 // fix anonymous function declarations
-                if ( v.getinfos().name == null ) {
+                if ( v.getinfos().name == null )
+                    compilestring( format( "local _%s = Benchmark.%s.bindenv( Benchmark ); function Benchmark::%s() { _%s() }", k, k, k, k ) )()
 
-                    compilestring( format( @"
+                // register internal functions
+                if ( startswith( k, "_" ) || (call_info.func == "main" && call_info.src == "benchmark.nut") )
+                    __internal_funcs[k] <- v.bindenv( Benchmark )
 
-                        local _%s = Benchmark.%s
-
-                        function Benchmark::%s() { _%s() }
-
-                    ", k, k, k, k ) )()
-                }
-
-                local infos = getstackinfos( 2 )
-
-                if ( startswith( k, "_" ) || (infos.func == "main" && infos.src == "benchmark.nut") )
-                    Benchmark.__internal_funcs[k] <- v.bindenv( Benchmark )
-
+                // fire benchmarkinit
                 if ( k == "_BenchmarkInit" )
                     _BenchmarkInit()
 
-                else if ( Benchmark.AUTO_ADD_FUNCTIONS && getstackinfos( 2 ).func != "__GetFunc" ) {
+                // add function to benchmark loop
+                else if ( AUTO_ADD_FUNCTIONS && !(k in __internal_funcs) && call_info.func != "__GetFunc" ) {
 
-                    if ( !(k in Benchmark.__internal_funcs) ) {
-
-                        Add( k, delay )
-                        delay += Benchmark.FUNCTION_CALL_DELAY
-                    }
+                    _Add( k, delay )
+                    delay += FUNCTION_CALL_DELAY
                 }          
             }
         }
@@ -266,9 +252,9 @@ function Benchmark::_StartOnce() {
     if ( FILTER_TEXT > 0 )
         SendToConsole( "con_filter_text BENCHMARK" )
 
-    BenchmarkPrint( BENCHMARK_START )
+    _BenchmarkPrint( BENCHMARK_START )
     if ( AUTO_PERF_COUNTER )
-        ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
+        _ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
 
     RemoveOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP )
     AddOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP, __loop_delay, -1 )
@@ -302,12 +288,12 @@ function Benchmark::_StartAll( delay = Benchmark.FUNCTION_CALL_DELAY ) {
  * Stop the benchmark loop                           *
  * wipe = true will clear all queued benchmark calls *
  *****************************************************/
-function Benchmark::_Stop( wipe = false ) {
+function Benchmark::_Stop( delay = -1, wipe = false ) {
 
     if ( AUTO_PERF_COUNTER )
-        ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
+        _ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
 
-    benchmark_ent.AcceptInput( CANCEL_PENDING, null, null, null )
+    EntFireByHandle( benchmark_ent, CANCEL_PENDING, null, delay, null, null )
     __loop_delay = LOOP_RESTART_DELAY
 
     if ( wipe ) {
@@ -322,7 +308,7 @@ function Benchmark::_Stop( wipe = false ) {
 
     local txt = BENCHMARK_END
 
-    BenchmarkPrint( BENCHMARK_END )
+    _BenchmarkPrint( BENCHMARK_END )
 }
 
 // alias for Stop
@@ -363,13 +349,13 @@ function Benchmark::__EndLoop() {
         SendToConsole( "con_filter_text BENCHMARK" )
 
     if ( AUTO_PERF_COUNTER )
-        ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
+        _ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
 
     local txt = BENCHMARK_END
     if ( __do_restart )
         txt = format( "%s\n\n Restarting in %.2f seconds", BENCHMARK_END, LOOP_RESTART_DELAY )
 
-    EntFireByHandle( benchmark_ent, "RunScriptCode", format( "BenchmarkPrint( @`%s` )", txt ), 0.02, null, null )
+    EntFireByHandle( benchmark_ent, "RunScriptCode", format( "_BenchmarkPrint( @`%s` )", txt ), 0.02, null, null )
 }
 
 function Benchmark::__StartLoop() {
@@ -383,7 +369,7 @@ function Benchmark::__StartLoop() {
         __OpenLogFile()
 
     if ( !__do_restart )
-        BenchmarkPrint( BENCHMARK_START )
+        _BenchmarkPrint( BENCHMARK_START )
 
     RemoveOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, END_LOOP )
     RemoveOutput( benchmark_ent, ON_TRIGGER, __targetname, CALL_FUNCTION, RESTART_LOOP )
@@ -393,7 +379,7 @@ function Benchmark::__StartLoop() {
     __do_restart = true
 
     if ( AUTO_PERF_COUNTER )
-        ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
+        _ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
 
     benchmark_ent.AcceptInput( TRIGGER_INPUT, null, null, null )
 }
@@ -406,9 +392,9 @@ function Benchmark::__RestartLoop() {
         SendToConsole( "con_filter_text BENCHMARK" )
 
     if ( AUTO_PERF_COUNTER )
-        ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
+        _ConsoleCmd( PERF_COUNTER_CVAR, MIN_PERF_WARNING_MS )
 
-    BenchmarkPrint( BENCHMARK_START )
+    _BenchmarkPrint( BENCHMARK_START )
     EntFireByHandle( benchmark_ent, TRIGGER_INPUT, null, 0.03, null, null )
 }
 
@@ -444,7 +430,7 @@ function Benchmark::__GetFunc( func, name_only = false ) {
     if ( typeof func != FUNCTION_TYPE )
         Assert( false, format( "%s Not a function: %s", BENCHMARK_PREFIX, func.tostring() ) )
 
-    local func_name = func.getinfos().name
+    local func_name = func.getinfos().name || UniqueString("ANON_FUNC")
 
     if ( !(func_name in Benchmark) )
         Benchmark[ func_name ] <- func
@@ -481,7 +467,7 @@ function Benchmark::__OpenLogFile() {
         LocalTime( time )
         local logfile = format( "scriptdata/%s/%s/%d_%d_%d_%d_%d_%d.log", LOG_DIR, __filename.slice( 0, -4 ), time.year, time.month, time.day, time.hour, time.minute, time.second )
         FileToString( logfile ) // create log file
-        ConsoleCmd( "con_logfile", logfile )
+        _ConsoleCmd( "con_logfile", logfile )
     }
 
     return true
@@ -490,7 +476,7 @@ function Benchmark::__OpenLogFile() {
 function Benchmark::__CloseLogFile() {
 
     if ( LOG_OUTPUT )
-        ConsoleCmd( "con_logfile", __old_logfile )
+        _ConsoleCmd( "con_logfile", __old_logfile )
 
     return true
 }
@@ -571,13 +557,13 @@ function Benchmark::_BenchmarkInit() {
 function Benchmark::_BenchmarkDestroy() {
 
     if ( AUTO_PERF_COUNTER )
-        ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
+        _ConsoleCmd( PERF_COUNTER_CVAR, __perf_warning_ms )
 
     if ( FILTER_TEXT )
         SendToConsole( "con_filter_enable 0" )
 
     if ( LOG_OUTPUT )
-        ConsoleCmd( "con_logfile", __old_logfile )
+        _ConsoleCmd( "con_logfile", __old_logfile )
 
     if ( "__ROOT" in getroottable() )
         delete ::__ROOT

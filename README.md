@@ -27,10 +27,10 @@ function Benchmark::MyFunction3() {
 }
 
 // start benchmarking loop
-EntFire( "__benchmark", "CallScriptFunction", "Start" )
+Benchmark.Start()
 
-// stop the loop after 20s
-EntFire( "__benchmark", "CallScriptFunction", "Stop", 20 )
+// stop the loop after 30s
+Benchmark.Stop( 30 )
 ```
 
 ### Advanced setup
@@ -53,22 +53,23 @@ function MyFunction3() {
 
     // ...
 }
-// One-off single function call with an optional delay
-Benchmark.RunOnce( MyFunction3, 10 ) // 10s delay
 
 // run all registered functions once
-EntFire( "__benchmark", "CallScriptFunction", "StartOnce" )
+Benchmark.StartOnce()
+
+// One-off single function call with an optional delay
+Benchmark.RunOnce( MyFunction3, 10 ) // 10s delay
 ```
 
 ### Notes
 
-- Any functions following the `Benchmark::MyFunc` format will be registered in the order they are defined
-    - use `Benchmark._Add()` to manually register functions
+- Any functions following the `Benchmark::MyFunc` or `Benchmark.MyFunc <- function()` format will be registered in the order they are defined
+    - use `Benchmark.Add()` to manually register functions
     - All functions prefixed with an underscore are considered "internal" and will need to be manually registered
-- Intended for solo testing/listen servers, dedicated works but not recommended.
+- Intended for solo testing/listen servers, dedicated works but not recommended due to heavy reliance on `con_filter...` commands.
     - Dedicated servers must do one of the following:
         - add "vscript_perf_warning_spew_ms" to their convar allowlist
         - set sv_allow_point_servercommand to "always"
         - manually set the convar to 0.0 and ignore the perf warnings for internal library functions
-- Stop and reload the entire benchmark system using `ent_fire __benchmark RunScriptCode "KillBenchmark(true)"`
-    - killing the entity also works but this will not cancel actively running benchmarks
+- stop and kill the entire benchmark system with `ent_fire __benchmark Kill`, or trigger a round restart.
+    - If your benchmark code involves restarting the round in a game event, you may need to add `IncludeScript( "benchmark" )` in that game event.

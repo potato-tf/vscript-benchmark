@@ -36,4 +36,4 @@ Benchmark.Testing <- function() {
         i * 2
 }
 
-EntFire( "__benchmark", "CallScriptFunction", "Start" )
+Benchmark.Start()
