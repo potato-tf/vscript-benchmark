@@ -1,4 +1,4 @@
-IncludeScript( "benchmark" )
+try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
 
 Benchmark.LOOP_RESTART_DELAY <- 10
 
@@ -7,7 +7,8 @@ local SetPropBool = NetProps.SetPropBool.bindenv( NetProps )
 local SetPropString = NetProps.SetPropString.bindenv( NetProps )
 local DispatchSpawn = Entities.DispatchSpawn.bindenv( Entities )
 local MAX_CLIENTS = MaxClients().tointeger()
-local MAX_EDICTS = Constants.Server.MAX_EDICTS
+// local MAX_EDICTS = Constants.Server.MAX_EDICTS
+local MAX_EDICTS = 2048
 
 function Benchmark::EntityGroupFromTable() {
 
@@ -116,7 +117,7 @@ function Benchmark::ByClassname() {
 
     for (local i = 0; i < 100; i++) {
 
-        local ent = CreateByClassname("logic_relay")
+        local ent = CreateByClassname( "logic_relay" )
         DispatchSpawn( ent )
         SetPropString( ent, "m_iName", "__relay" )
     }
@@ -126,7 +127,7 @@ function Benchmark::FromTable() {
 
     for (local i = 0; i < 100; i++) {
 
-        SpawnEntityFromTable("logic_relay", { targetname = "__relay" })
+        SpawnEntityFromTable( "logic_relay", { targetname = "__relay" } )
     }
 }
 
@@ -136,4 +137,4 @@ function Benchmark::Done() {
     EntFire( "crystal*", "Kill" )
 }
 
-Benchmark.Start()
+Benchmark._Start()

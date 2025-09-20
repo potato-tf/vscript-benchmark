@@ -1,9 +1,13 @@
-IncludeScript( "benchmark" )
+// try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
 
-// Benchmark.LOOP_RESTART_DELAY = 10
+Benchmark.LOOP_RESTART_DELAY <- 3.0
 
 local arr = array( 1000 )
+local arr_len = arr.len()
 
+/*****************
+ * LENGTH CHECKS *
+ *****************/
 function Benchmark::Len() {
 
     for ( local i = 0; i < 1000; i++ )
@@ -11,6 +15,7 @@ function Benchmark::Len() {
             local len = true
 }
 
+// ~40% faster, no _OP_PREPCALLK/_OP_CALL instructions
 function Benchmark::Idx() {
 
     for ( local i = 0; i < 1000; i++ )
@@ -18,6 +23,9 @@ function Benchmark::Idx() {
             local len = true
 }
 
+// /****************************
+//  * EMPTY ARRAY/TABLE CHECKS *
+//  ****************************/
 function Benchmark::LenExplicit() {
 
     for ( local i = 0; i < 1000; i++ )
@@ -25,6 +33,7 @@ function Benchmark::LenExplicit() {
             local len = true
 }
 
+// ~2-5% faster, no _OP_NE instruction
 function Benchmark::LenFalsy() {
     
     for ( local i = 0; i < 1000; i++ )
@@ -32,29 +41,46 @@ function Benchmark::LenFalsy() {
             local len = true
 }
 
+/*******************
+ * ARRAY ITERATION *
+ *******************/
 
-function Benchmark::ForLoop() {
+// standard for loop
+// NOTE: if we used arr.len() we would be 300% slower, due to an additional _OP_PREPCALLK/_OP_CALL instruction every iteration
+// caching the length changes this to a single _OP_GETOUTER
+// -----dump
+// [000]     _OP_LOADINT 1 0 0 0
+// [001]    _OP_GETOUTER 2 0 0 0
+// [002]        _OP_JCMP 2 4 1 3
+// [003]     _OP_LOADINT 2 2 0 0
+// [004]         _OP_MUL 2 2 1 0
+// [005]       _OP_PINCL 2 1 0 1
+// [006]         _OP_JMP 0 -6 0 0
+// [007]      _OP_RETURN 255 0 0 0
+// -----
+function Benchmark::ForLoop() { for ( local i = 0; i < arr_len; i++ ) i * 2 }
 
-    local _arr = clone arr
+// slightly faster, specialized _OP_FOREACH instruction that doesn't use _OP_JCMP
+// -----dump
+// [000]    _OP_GETOUTER 1 0 0 0
+// [001]   _OP_LOADNULLS 2 3 0 0
+// [002]     _OP_FOREACH 1 4 2 0
+// [003] _OP_POSTFOREACH 1 4 2 0
+// [004]     _OP_LOADINT 5 2 0 0
+// [005]         _OP_MUL 5 5 2 0
+// [006]         _OP_JMP 0 -5 0 0
+// [007]      _OP_RETURN 255 0 0 0
+// -----
+function Benchmark::ForEach() { foreach ( i, v in arr ) i * 2 }
 
-    for ( local i = 0; i < _arr.len(); i++ )
-        i * 2
-}
+// same as ForLoop
+// function Benchmark::WhileLoop() { local i = 0; while ( i < arr.len() ) { i * 2; i++ } }
 
-// almost 3x faster apparently
-function Benchmark::ForEach() {
+// ~1-4% faster than for loop
+// NOTE: inconsistent results, will occasionally spike much higher than ForLoop
+// function Benchmark::ApplyLambda() { arr.apply( @(v, i) i * 2 ) }
 
-    local _arr = clone arr
+Benchmark._Start()
 
-    foreach ( i, v in _arr )
-        i * 2
-}
-
-function Benchmark::ApplyLambda() {
-
-    local _arr = clone arr
-
-    _arr.apply( @(v, i) i * 2 )
-}
-
-Benchmark.StartOnce()
+// Benchmark.ForLoop()
+// Benchmark.ForEach()

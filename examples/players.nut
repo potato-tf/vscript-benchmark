@@ -1,7 +1,8 @@
-IncludeScript( "benchmark" )
+try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
 
 local MAX_CLIENTS = MaxClients().tointeger()
-local MAX_EDICTS = Constants.Server.MAX_EDICTS
+// local MAX_EDICTS = Constants.Server.MAX_EDICTS
+local MAX_EDICTS = 2048
 local ALL_PLAYERS = {}
 local player_manager = Entities.FindByClassname( null, "tf_player_manager" )
 
@@ -102,4 +103,4 @@ Benchmark.PlayerBenchmarkEvents <- {
 
 __CollectGameEventCallbacks( Benchmark.PlayerBenchmarkEvents )
 
-Benchmark.Start()
+Benchmark._Start()
