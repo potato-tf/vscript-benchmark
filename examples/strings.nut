@@ -1,11 +1,27 @@
-// try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
+// copy/paste this try/catch for your benchmarks if you want vanilla squirrel support
+try { 
+    if ( !("Benchmark" in getroottable()) ) 
+        dofile( "benchmark.nut" ) 
+} 
+catch ( e ) { 
+    IncludeScript( "benchmark" ) 
+}
+
+/********************************************************************************
+ * STRING COMPARISONS:                                                          *
+ *                                                                              *
+ * Squirrel strings, like C, are just an array of chars, and chars are integers *
+ * this means you can skip a lot of the overhead of string comparisons          *
+ * and do simple integer comparisons for significant performance gains          *
+ ********************************************************************************/
+
+Benchmark.LOOP_RESTART_DELAY <- 1.0
 
 local mins = Vector(-1, -2, -3)
 local maxs = Vector(1, 2, 3)
 local kvstring = ""
-local str = "test"
-
-// local chararray = @(input) array( input.len(), 0 ).apply( @( _, i ) input[i] )
+local map_name = GetMapName()
+local map_name_len = map_name.len()
 
 // slow string comparison
 // -----dump
@@ -14,7 +30,7 @@ local str = "test"
 // [002]        _OP_JCMP 2 8 1 3
 // [003]   _OP_PREPCALLK 2 "startswith" 0 3
 // [004]    _OP_GETOUTER 4 0 0 0
-// [005]        _OP_LOAD 5 "t" 0 0
+// [005]        _OP_LOAD 5 "workshop/" 0 0
 // [006]        _OP_CALL 2 2 3 3
 // [007]          _OP_JZ 2 1 0 0
 // [008]    _OP_LOADBOOL 2 1 0 0
@@ -25,8 +41,8 @@ local str = "test"
 function Benchmark::StartsWith() {
 
     for ( local i = 0; i < 10000; i++ )
-        if ( startswith( str, "t" ) )
-            local len = true
+        if ( startswith( map_name, "workshop/" ) )
+            local test = true
 }
 
 // ~500-600% faster, simple integer comparison, no string _OP_LOAD, no function calls
@@ -48,8 +64,16 @@ function Benchmark::StartsWith() {
 function Benchmark::CharCompare() {
 
     for ( local i = 0; i < 10000; i++ )
-        if ( str[0] == 't' )
-            local len = true
+        if ( 8 in map_name && map_name[8] == '/' )
+            local test = true
+}
+
+// about the same as above
+function Benchmark::CharCompareLen() {
+
+    for ( local i = 0; i < 10000; i++ )
+        if ( map_name_len > 8 && map_name[8] == '/' )
+            local test = true
 }
 
 // slow string concatenation, generates a ton of _OP_ADD/_OP_LOAD instructions
@@ -124,7 +148,6 @@ function Benchmark::StringFormat() {
 
     for ( local i = 0; i < 10000; i++ )
         kvstring = format("%g,%g,%g,%g,%g,%g", mins.x, mins.y, mins.z, maxs.x, maxs.y, maxs.z)
-
 }
 
 // faster than format for vectors/qangles, no _OP_GETK instructions
@@ -150,7 +173,6 @@ function Benchmark::StringKVStringFormat() {
 
     for (local i = 0; i < 10000; i++ )
         kvstring = format("%s %s", mins.ToKVString(), maxs.ToKVString())
-
 }
 
 // faster than previous, 3 or less _OP_ADD instructions is cheaper than 1 _OP_PREPCALLK/_OP_CALL for format()

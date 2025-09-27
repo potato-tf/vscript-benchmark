@@ -1,4 +1,19 @@
-// try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
+// copy/paste this try/catch for your benchmarks if you want vanilla squirrel support
+try { 
+    if ( !("Benchmark" in getroottable()) ) 
+        dofile( "benchmark.nut" ) 
+} 
+catch ( e ) { 
+    IncludeScript( "benchmark" ) 
+}
+
+/************************************************************************************************
+ * ARRAYS:                                                                                      *
+ * Squirrel's .len() function can be expensive.                                                 *
+ * Direct index lookups are generally much faster, skipping _OP_PREPCALLK/_OP_CALL instructions *
+ * NEVER use .len() inside a for loop.  Always cache it off before looping.                     *
+ * (This doesn't apply to backwards looping e.g. starting at array.len() - 1 and decrementing)  *
+ ************************************************************************************************/
 
 Benchmark.LOOP_RESTART_DELAY <- 3.0
 
@@ -60,6 +75,11 @@ function Benchmark::LenFalsy() {
 // -----
 function Benchmark::ForLoop() { for ( local i = 0; i < arr_len; i++ ) i * 2 }
 
+// ~1-4% faster than for loop
+// NOTE: inconsistent results, will occasionally spike much higher than ForLoop
+// (likely GC hits?)
+// function Benchmark::ApplyLambda() { arr.apply( @(v, i) i * 2 ) }
+
 // slightly faster, specialized _OP_FOREACH instruction that doesn't use _OP_JCMP
 // -----dump
 // [000]    _OP_GETOUTER 1 0 0 0
@@ -75,10 +95,6 @@ function Benchmark::ForEach() { foreach ( i, v in arr ) i * 2 }
 
 // same as ForLoop
 // function Benchmark::WhileLoop() { local i = 0; while ( i < arr.len() ) { i * 2; i++ } }
-
-// ~1-4% faster than for loop
-// NOTE: inconsistent results, will occasionally spike much higher than ForLoop
-// function Benchmark::ApplyLambda() { arr.apply( @(v, i) i * 2 ) }
 
 Benchmark._Start()
 

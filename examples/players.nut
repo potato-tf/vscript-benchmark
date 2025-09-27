@@ -1,9 +1,19 @@
-try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
+// copy/paste this try/catch for your benchmarks if you want vanilla squirrel support
+try { 
+    if ( !("Benchmark" in getroottable()) ) 
+        dofile( "benchmark.nut" ) 
+} 
+catch ( e ) { 
+    IncludeScript( "benchmark" ) 
+}
+
+Benchmark.FUNCTION_CALL_DELAY <- 0.5
+Benchmark.MIN_PERF_WARNING_MS <- 0.0
 
 local MAX_CLIENTS = MaxClients().tointeger()
 // local MAX_EDICTS = Constants.Server.MAX_EDICTS
 local MAX_EDICTS = 2048
-local ALL_PLAYERS = {}
+::ALL_PLAYERS <- {}
 local player_manager = Entities.FindByClassname( null, "tf_player_manager" )
 
 // to give these benchmarks the fairest chance
@@ -11,25 +21,26 @@ local Next  = Entities.Next.bindenv( Entities )
 local First = Entities.First.bindenv( Entities )
 local FindByClassname = Entities.FindByClassname.bindenv( Entities )
 
-// faster for small player counts
+
+// This is slower than byclassname? why do people recommend this?
+function Benchmark::ByIndex() {
+
+    for ( local i = 1, player; i <= MAX_CLIENTS; i++ )
+        if ( player = PlayerInstanceFromIndex(i) )
+            local temp = player.entindex()
+}
+
+// significantly faster
 function Benchmark::ByClassname() {
 
     for ( local player; player = FindByClassname(player, "player"); )
         local temp = player.entindex()
 }
 
-// fast enough for most use cases, noticeably faster than FindByClassname for large player counts
-function Benchmark::ByIndex() {
-
-    for (local i = 1, player; i <= MAX_CLIENTS; i++)
-        if ( player = PlayerInstanceFromIndex(i) )
-            local temp = player.entindex()
-}
-
-// by far the fastest approach for all player lookups
-function Benchmark::TableIteration() {
+// faster still
+function Benchmark::IterTable() {
     
-    foreach ( player in ALL_PLAYERS )
+    foreach ( player in ALL_PLAYERS.keys() )
         local temp = player.entindex()
 }
 
@@ -78,12 +89,12 @@ function Benchmark::IsPlayer() {
 
 Benchmark.PlayerBenchmarkEvents <- {
 
-    function OnGameEvent_player_team( params ) {
+    function OnGameEvent_player_spawn( params ) {
 
         if ( !ALL_PLAYERS.len() )
             for (local i = 1, player; i <= MAX_CLIENTS; i++)
                 if ( player = PlayerInstanceFromIndex(i) )
-                    ALL_PLAYERS[ player ] <- GetPropIntArray( player_manager, "m_iUserID", i )
+                    ALL_PLAYERS[ player ] <- NetProps.GetPropIntArray( player_manager, "m_iUserID", i )
 
 
         local player = GetPlayerFromUserID( params.userid )

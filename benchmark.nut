@@ -1,22 +1,37 @@
 ::__ROOT  <- getroottable()
 
-if ( "Benchmark" in __ROOT )
-    return
+if ( "Benchmark" in __ROOT && !("dofile" in __ROOT) ) {
+
+    print("BENCHMARK ALREADY LOADED! Run `ent_fire __benchmark Kill` and try again.\n")
+    print("BENCHMARK ALREADY LOADED! Run `ent_fire __benchmark Kill` and try again.\n")
+    print("BENCHMARK ALREADY LOADED! Run `ent_fire __benchmark Kill` and try again.\n")
+}
 
 /***************************************************
  * CONFIG                                          *
  * most config settings can also be set per-script *
  * e.g. Benchmark.LOOP_RESTART_DELAY = 10          *
- * NO_MULTITHREADING cannot be set per-script      *
  ***************************************************/
+
+/****************************************
+ * The follow cannot be set per-script: *
+ * NO_MULTITHREADING                    *
+ * NO_API_FORCE                         *
+ * NO_QUEUE                             *
+ ****************************************/
 local config = {
 
-    NO_MULTITHREADING  = true // sets mat_queue_mode 0 while script is active.  Fixes scrambled console prints.
+    // sets mat_queue_mode 0 while script is active.  Fixes scrambled console prints.
+    NO_MULTITHREADING  = true
 
-    FUNCTION_CALL_DELAY = 0.3 // default delay in seconds between function calls
-    LOOP_RESTART_DELAY  = 5 // default delay in seconds between full benchmark loop restarts
+    // default delay in seconds between function calls
+    FUNCTION_CALL_DELAY = 0.3
 
-    AUTO_PERF_COUNTER = true // automatically control the perf counter during benchmarks
+    // default delay in seconds between full benchmark loop restarts
+    LOOP_RESTART_DELAY  = 5
+
+    // automatically control the perf counter during benchmarks
+    AUTO_PERF_COUNTER = true
 
     // automatically add functions to the benchmark loop in the order they are defined
     // functions must be scoped to Benchmark.  e.g. Benchmark::MyFunc()
@@ -30,7 +45,7 @@ local config = {
     FILTER_TEXT = 1
 
     // minimum perf warning ms
-    // probably don't set this too low if FILTER_TEXT is not 1
+    // text filtering does not work reliably if this is too low.
     MIN_PERF_WARNING_MS = 0.005
 
     // log output to file
@@ -38,16 +53,24 @@ local config = {
     LOG_OUTPUT = true
     LOG_DIR    = "benchmarks"
 
-    NO_API     = false // replace API calls with dummy functions for bytecode dumps
+    // always enable no api compatibility for bytecode dumps
+    // this is detected automatically and likely not needed for most cases
+    NO_API_FORCE     = false
 
     // functions will not wait for the next benchmark loop and will immediately trigger a new benchmark loop
     // you should almost never set this to true, mostly here for testing
     NO_QUEUE = false
 }
 
-if ( config.NO_API ) {
+// assume we're using sq.exe if a base API function is missing
+// or if we already overwrote API calls with dummy functions (Entities.First() never returns null in-game)
+local NO_API = config.NO_API_FORCE || ( !("IsDedicatedServer" in __ROOT) || !Entities.First() )
 
-    try { dofile( "./no_api_compat.nut", true ) } catch (e) IncludeScript( "no_api_compat" )
+printf( "USING VSCRIPT API: %s\n", NO_API.tostring() )
+
+if ( NO_API ) {
+
+    dofile( "./no_api_compat.nut", true )
     config.AUTO_ADD_FUNCTIONS = false
     config.LOG_OUTPUT = false
 }
@@ -73,20 +96,20 @@ local _Filter__Prefix     = "_Filter_"
 local Input_Prefix        = "Input"
 local con_logfile_str     = "con_logfile"
 
-local IS_DEDICATED        = config.NO_API ? false : IsDedicatedServer()
-local CONVAR_ON_ALLOWLIST = config.NO_API ? false : Convars.IsConVarOnAllowList( PERF_COUNTER_CVAR )
+local IS_DEDICATED        = NO_API ? false : IsDedicatedServer()
+local CONVAR_ON_ALLOWLIST = NO_API ? false : Convars.IsConVarOnAllowList( PERF_COUNTER_CVAR )
 
 // re-define for performance/simplicity
-local SetConvar           = config.NO_API ? @( cmd, value ) null : Convars.SetValue.bindenv( Convars )
-local GetConvar           = config.NO_API ? @( cmd ) ""  : Convars.GetStr.bindenv( Convars )
-local GetConvarInt        = config.NO_API ? @( cmd ) 0   : Convars.GetInt.bindenv( Convars )
-local GetConvarFloat      = config.NO_API ? @( cmd ) 0.0 : Convars.GetFloat.bindenv( Convars )
+local SetConvar           = NO_API ? @( cmd, value ) null : Convars.SetValue.bindenv( Convars )
+local GetConvar           = NO_API ? @( cmd ) ""  : Convars.GetStr.bindenv( Convars )
+local GetConvarInt        = NO_API ? @( cmd ) 0   : Convars.GetInt.bindenv( Convars )
+local GetConvarFloat      = NO_API ? @( cmd ) 0.0 : Convars.GetFloat.bindenv( Convars )
 
-local CreateByClassname   = config.NO_API ? @( classname ) DummyEnt() : Entities.CreateByClassname.bindenv( Entities )
-local AddOutput           = config.NO_API ? @( ent, output, target, input, parameter, delay, flags ) null : EntityOutputs.AddOutput.bindenv( EntityOutputs )
-local RemoveOutput        = config.NO_API ? @( ent, output, target, input, parameter ) null : EntityOutputs.RemoveOutput.bindenv( EntityOutputs )
-local GetNumElements      = config.NO_API ? @( ent, output ) 0 : EntityOutputs.GetNumElements.bindenv( EntityOutputs )
-local GetOutputTable      = config.NO_API ? @( ent, output, table, index ) null : EntityOutputs.GetOutputTable.bindenv( EntityOutputs )
+local CreateByClassname   = NO_API ? @( classname ) DummyEnt() : Entities.CreateByClassname.bindenv( Entities )
+local AddOutput           = NO_API ? @( ent, output, target, input, parameter, delay, flags ) null : EntityOutputs.AddOutput.bindenv( EntityOutputs )
+local RemoveOutput        = NO_API ? @( ent, output, target, input, parameter ) null : EntityOutputs.RemoveOutput.bindenv( EntityOutputs )
+local GetNumElements      = NO_API ? @( ent, output ) 0 : EntityOutputs.GetNumElements.bindenv( EntityOutputs )
+local GetOutputTable      = NO_API ? @( ent, output, table, index ) null : EntityOutputs.GetOutputTable.bindenv( EntityOutputs )
 
 // these exist in entity scope by default, or are handled differently, ignore them
 local function_blacklist = {
@@ -104,9 +127,9 @@ local function_blacklist = {
  * we're not doing the delay and looping logic in vscript to *
  * avoid tripping the perf counter ourselves                 *
  *************************************************************/
-local benchmark_ent = config.NO_API ? DummyEnt() : SpawnEntityFromTable( "logic_relay", { targetname = "__benchmark" vscripts = " " spawnflags = config.NO_QUEUE ? 2 : 0 })
+local benchmark_ent = NO_API ? DummyEnt() : SpawnEntityFromTable( "logic_relay", { targetname = "__benchmark" vscripts = " " spawnflags = config.NO_QUEUE ? 2 : 0 })
 
-if ( !config.NO_API )
+if ( !NO_API )
     NetProps.SetPropBool( benchmark_ent, "m_bForcePurgeFixedupStrings", true )
 
 /****************************************
@@ -122,10 +145,10 @@ Benchmark.__targetname      <- benchmark_ent.GetName()
 Benchmark.__loop_delay      <-  0.0 // delay between loop restarts
 Benchmark.__internal_funcs  <- {} // track internal functions
 Benchmark.__do_restart      <- false // restart loop is active
-Benchmark.__perf_warning_ms <- config.NO_API ? 1.5 : GetConvarFloat( PERF_COUNTER_CVAR )
-Benchmark.__mat_queue_mode  <- config.NO_API ? 0 : GetConvarInt( "mat_queue_mode" )
-Benchmark.__old_con_filter  <- config.NO_API ? 0 : GetConvarInt( "con_filter_enable" )
-Benchmark.__old_logfile     <- config.NO_API ? "" : GetConvar( con_logfile_str )
+Benchmark.__perf_warning_ms <- NO_API ? 1.5 : GetConvarFloat( PERF_COUNTER_CVAR )
+Benchmark.__mat_queue_mode  <- NO_API ? 0 : GetConvarInt( "mat_queue_mode" )
+Benchmark.__old_con_filter  <- NO_API ? 0 : GetConvarInt( "con_filter_enable" )
+Benchmark.__old_logfile     <- NO_API ? "" : GetConvar( con_logfile_str )
 Benchmark.__num_runs        <- 0
 
 // Ghetto constructor/destructor logic using table metamethods
@@ -161,7 +184,7 @@ Benchmark.setdelegate({
 
                 // fix anonymous function declarations
                 if ( v.getinfos().name == null )
-                    return compilestring( format( "local _%s = Benchmark.%s.bindenv( Benchmark ); function Benchmark::%s() { _%s() }", k, k, k, k ) )()
+                    return compilestring( format( "local _%s = %s; function %s() { _%s() }", k, k, k, k ) ).call(Benchmark)
 
                 // register internal functions
                 if ( k[0] == '_' || (call_info.func == "main" && call_info.src == "benchmark.nut") )
@@ -259,7 +282,7 @@ function Benchmark::_BenchmarkPrintFiltered( str, ... ) {
 
     if ( FILTER_TEXT > 0 )
         // _ConFilterText( false, str, format( "script printf( %s );script ClientPrint( null, 2, %s )", str, str ) )
-        _ConFilterText( false, str, format( "script printf( %s ), ClientPrint( null, 2, %s )", str, str ) )
+        _ConFilterText( false, str, format( "wait 10; script printf( %s ), ClientPrint( null, 2, %s )", str, str ) )
 
     // print( formatted )
     // if ( IS_DEDICATED )

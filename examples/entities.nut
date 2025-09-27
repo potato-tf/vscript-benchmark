@@ -1,6 +1,19 @@
-try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
+// copy/paste this try/catch for your benchmarks if you want vanilla squirrel support
+try { 
+    if ( !("Benchmark" in getroottable()) ) 
+        dofile( "benchmark.nut" ) 
+} 
+catch ( e ) { 
+    IncludeScript( "benchmark" ) 
+}
 
-Benchmark.LOOP_RESTART_DELAY <- 10
+/***************************************************************************************************************
+ * ENTITIES:                                                                                                   *
+ * SpawnEntityGroupFromTable is faster than SpawnEntityFromTable for batch entity spawning                     *
+ * SpawnEntityFromTable is faster than CreateByClassname/netprop/keyvaluefromstring for single entity spawning *
+ ***************************************************************************************************************/
+
+Benchmark.LOOP_RESTART_DELAY <- 3
 
 local CreateByClassname = Entities.CreateByClassname.bindenv( Entities )
 local SetPropBool = NetProps.SetPropBool.bindenv( NetProps )
@@ -66,6 +79,7 @@ function Benchmark::EntityGroupFromTable() {
     })
 }
 
+// ~15-25% faster for batch entity spawning
 function Benchmark::PointScriptTemplate() {
 
     local script_template = Entities.CreateByClassname("point_script_template")
@@ -113,6 +127,10 @@ function Benchmark::PointScriptTemplate() {
     script_template.AcceptInput( "ForceSpawn", null, null, null )
 }
 
+// anywhere from 15-30% faster for single entity spawning
+// The table passed to SpawnEntityFromTable needs to be interpreted and converted to something C++ can understand
+// also, wide performance variations are likely due to garbage collection on the passed table
+// meanwhile CreateByClassname/netprop/keyvaluefromstring are simple 1:1 C++ bindings
 function Benchmark::ByClassname() {
 
     for (local i = 0; i < 100; i++) {

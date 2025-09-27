@@ -1,5 +1,16 @@
-try { dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
-
+// copy/paste this try/catch for your benchmarks if you want vanilla squirrel support
+try { 
+    if ( !("Benchmark" in getroottable()) ) 
+        dofile( "benchmark.nut" ) 
+} 
+catch ( e ) { 
+    IncludeScript( "benchmark" ) 
+}
+/***********************************************************************************************************
+ * FOLDING:                                                                                                *
+ * Folding functions from their original scope into local/root scope is noticeably faster (~15-30%)        *
+ * skips extra lookup instructions, also less verbose                                                      *
+ ***********************************************************************************************************/
 local GetPropString = NetProps.GetPropString.bindenv( NetProps )
 // local MAX_EDICTS = Constants.Server.MAX_EDICTS
 local MAX_EDICTS = 2048
