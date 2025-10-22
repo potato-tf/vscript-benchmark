@@ -169,7 +169,7 @@ function Benchmark::StringFormat() {
 // [014]         _OP_JMP 0 -14 0 0
 // [015]      _OP_RETURN 255 0 0 0
 // -----
-function Benchmark::StringKVStringFormat() {
+function Benchmark::KVStringFormat() {
 
     for (local i = 0; i < 10000; i++ )
         kvstring = format("%s %s", mins.ToKVString(), maxs.ToKVString())
@@ -195,7 +195,7 @@ function Benchmark::StringKVStringFormat() {
 // [015]      _OP_RETURN 255 0 0 0
 // -----
 
-function Benchmark::StringKVStringConcat() {
+function Benchmark::KVStringConcat() {
 
     for (local i = 0; i < 10000; i++ )
         kvstring = mins.ToKVString() + " " + maxs.ToKVString()

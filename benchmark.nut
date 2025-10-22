@@ -627,6 +627,9 @@ function Benchmark::__BenchmarkDestroy() {
     if ( LOG_OUTPUT )
         _ConsoleCmd( con_logfile_str, __old_logfile )
 
+    if ( "_OnDestroy" in this )
+        _OnDestroy()
+
     if ( "__ROOT" in getroottable() )
         delete ::__ROOT
 }

@@ -1,11 +1,5 @@
-// copy/paste this try/catch for your benchmarks if you want vanilla squirrel support
-try { 
-    if ( !("Benchmark" in getroottable()) ) 
-        dofile( "benchmark.nut" ) 
-} 
-catch ( e ) { 
-    IncludeScript( "benchmark" ) 
-}
+// copy/paste this try/catch at the top of the script to initialize everything.
+try { if ( !("Benchmark" in getroottable()) ) dofile( "benchmark.nut" ) } catch ( e ) { IncludeScript( "benchmark" ) }
 
 /************************************************************************************************
  * ARRAYS:                                                                                      *
@@ -38,9 +32,9 @@ function Benchmark::Idx() {
             local len = true
 }
 
-// /****************************
-//  * EMPTY ARRAY/TABLE CHECKS *
-//  ****************************/
+/****************************
+ * EMPTY ARRAY/TABLE CHECKS *
+ ****************************/
 function Benchmark::LenExplicit() {
 
     for ( local i = 0; i < 1000; i++ )
