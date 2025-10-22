@@ -66,7 +66,7 @@ This script includes a "compatibility mode" for running your scripts on the stan
 
 This is mostly meant for comparing bytecode for *vanilla* squirrel code, and will almost certainly fall apart and spew errors for very complicated functions with a lot of VScript API calls.  It does not give any valuable information on the real-world performance of VScript API functions.
 
-### Notes
+## Notes
 
 - Any functions following the `Benchmark::MyFunc` or `Benchmark.MyFunc <- function()` format will be registered in the order they are defined
     - use `Benchmark.Add()` to manually register functions
