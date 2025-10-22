@@ -2,7 +2,7 @@
 
 Simple VScript library for performance debugging using the in-game performance counter.  
 
-Drop the `benchmark.nut` file into `tf/scripts/vscripts/`, include it in your file, and start benchmarking.
+Drop the `benchmark.nut` file into `tf/scripts/vscripts/`, include it in your file, and start benchmarking.  Configuration options are inside this file.
 
 ### Basic setup
 
@@ -60,6 +60,11 @@ Benchmark.StartOnce()
 // One-off single function call with an optional delay
 Benchmark.RunOnce( MyFunction3, 10 ) // 10s delay
 ```
+
+## No-API compatibility mode
+This script includes a "compatibility mode" for running your scripts on the standalone squirrel interpreter outside of TF2 by mapping every VScript API function to dummy functions.  Intended to be used alongside the interpreter [At the bottom of this page](https://ficool2.github.io/HammerPlusPlus-Website/tools.html) for analyzing bytecode dumps.
+
+This is mostly meant for comparing bytecode for *vanilla* squirrel code, and will almost certainly fall apart and spew errors for very complicated functions with a lot of VScript API calls.  It does not give any valuable information on the real-world performance of VScript API functions.
 
 ### Notes
 
