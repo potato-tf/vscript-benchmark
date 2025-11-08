@@ -21,8 +21,8 @@ local Next  = Entities.Next.bindenv( Entities )
 local First = Entities.First.bindenv( Entities )
 local FindByClassname = Entities.FindByClassname.bindenv( Entities )
 
-
-// This is slower than byclassname? why do people recommend this?
+// This is slower than byclassname for low player count/low edict maps
+// but faster for high player count/high edict maps
 function Benchmark::ByIndex() {
 
     for ( local i = 1, player; i <= MAX_CLIENTS; i++ )
@@ -30,14 +30,13 @@ function Benchmark::ByIndex() {
             local temp = player.entindex()
 }
 
-// significantly faster
 function Benchmark::ByClassname() {
 
     for ( local player; player = FindByClassname(player, "player"); )
         local temp = player.entindex()
 }
 
-// faster still
+// faster than both to iterate a pre-collected table
 function Benchmark::IterTable() {
     
     foreach ( player in ALL_PLAYERS.keys() )

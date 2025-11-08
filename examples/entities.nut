@@ -22,6 +22,7 @@ local DispatchSpawn = Entities.DispatchSpawn.bindenv( Entities )
 local MAX_CLIENTS = MaxClients().tointeger()
 // local MAX_EDICTS = Constants.Server.MAX_EDICTS
 local MAX_EDICTS = 2048
+local WORLDSPAWN = Entities.First()
 
 function Benchmark::EntityGroupFromTable() {
 
@@ -129,7 +130,7 @@ function Benchmark::PointScriptTemplate() {
 
 // anywhere from 15-30% faster for single entity spawning
 // The table passed to SpawnEntityFromTable needs to be interpreted and converted to something C++ can understand
-// also, wide performance variations are likely due to garbage collection on the passed table
+// wide performance variations are likely due to garbage collection on the passed table
 // meanwhile CreateByClassname/netprop/keyvaluefromstring are simple 1:1 C++ bindings
 function Benchmark::ByClassname() {
 
@@ -147,6 +148,22 @@ function Benchmark::FromTable() {
 
         SpawnEntityFromTable( "logic_relay", { targetname = "__relay" } )
     }
+}
+
+function Benchmark::AppendEnts() {
+
+    local ents = []
+    for ( local ent = WORLDSPAWN; ent; ent = Entities.Next( ent ) )
+        ents.append( ent )
+}
+
+function Benchmark::PreSizedArray() {
+
+    local ents = array( MAX_EDICTS )
+    for ( local ent = WORLDSPAWN, i = 0; ent; ent = Entities.Next( ent ) )
+        ents[i++] = ent
+
+    ents = ents.filter( @( _, e ) e )
 }
 
 function Benchmark::Done() {

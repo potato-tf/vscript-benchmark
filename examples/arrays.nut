@@ -90,6 +90,41 @@ function Benchmark::ForEach() { foreach ( i, v in arr ) i * 2 }
 // same as ForLoop
 // function Benchmark::WhileLoop() { local i = 0; while ( i < arr.len() ) { i * 2; i++ } }
 
+function Benchmark::Append() {
+
+    local arr = []
+
+    for ( local i = 0; i < 10000; i++ )
+        arr.append( i )
+}
+
+// 100-200% faster than appending if you already know the size of the array
+function Benchmark::PreSizedArray() {
+
+    local arr = array( 10000 )
+    for ( local i = 0; i < 10000; i++ )
+        arr[i] = i
+}
+
+function Benchmark::PreSizedArray2() {
+
+    local arr = array( 10000 )
+    local i = 0
+    while ( i < 10000 )
+        arr[i++] = i
+
+    printl( arr[0] + " : " + arr[9999] )
+}
+
+function Benchmark::PreSizedArray3() {
+
+    local arr = array( 10000 )
+    local i = 0
+    while ( i < 9999 )
+        arr[++i] = i
+
+    printl( arr[0] + " : " + arr[9999] )
+}
 Benchmark._Start()
 
 // Benchmark.ForLoop()
